@@ -1,0 +1,7 @@
+PyMuPDF
+Pillow
+tkinterdnd2
+rapidocr
+onnxruntime
+pywin32; platform_system == "Windows"
+docx2pdf
