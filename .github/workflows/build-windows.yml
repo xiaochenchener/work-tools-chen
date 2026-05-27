@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build
 
 on:
   workflow_dispatch:
@@ -62,10 +62,72 @@ jobs:
           name: work-tools-chen-windows
           path: release/work-tools-chen-windows.zip
 
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build macOS app
+        run: |
+          add_data_args=""
+          if [ -d "models" ]; then
+            add_data_args="--add-data models:models"
+          fi
+
+          pyinstaller main.py \
+            --name work-tools-chen \
+            --onedir \
+            --windowed \
+            --clean \
+            --noconfirm \
+            --collect-all tkinterdnd2 \
+            --collect-all rapidocr \
+            --collect-all onnxruntime \
+            --collect-all docx2pdf \
+            $add_data_args
+
+      - name: Pack macOS artifact
+        run: |
+          mkdir -p release
+          cd dist && zip -r ../release/work-tools-chen-macos.zip work-tools-chen/
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: work-tools-chen-macos
+          path: release/work-tools-chen-macos.zip
+
+  release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create $env:GITHUB_REF_NAME release/work-tools-chen-windows.zip --title $env:GITHUB_REF_NAME --notes "work-tools-chen Windows 自动构建版本"
+          gh release create $GITHUB_REF_NAME \
+            release/work-tools-chen-windows/work-tools-chen-windows.zip \
+            release/work-tools-chen-macos/work-tools-chen-macos.zip \
+            --title "$GITHUB_REF_NAME" \
+            --notes "work-tools-chen $GITHUB_REF_NAME 自动构建版本 (Windows + macOS)"
